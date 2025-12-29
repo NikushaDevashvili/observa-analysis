@@ -27,9 +27,23 @@ class HallucinationDetectorV2:
         if not HallucinationDetectorV2._initialized:
             logger.info("Loading hallucination detection model (sentence-transformers)...")
             try:
-                # Use a model that supports NLI tasks
-                # all-mpnet-base-v2 is good for semantic similarity
-                HallucinationDetectorV2._model = SentenceTransformer('all-mpnet-base-v2')
+                # Use a lighter model to avoid OOM issues
+                # all-MiniLM-L6-v2 is smaller (~80MB) and faster, already used by context detector
+                # This reuses the same model instance if available, saving memory
+                try:
+                    # Try to reuse context detector's model if it exists
+                    from services.context_detector import ContextDetector
+                    context_detector = ContextDetector()
+                    if hasattr(context_detector, 'model'):
+                        HallucinationDetectorV2._model = context_detector.model
+                        logger.info("Reusing context detector model for hallucination detection (memory efficient)")
+                    else:
+                        raise AttributeError("Context detector model not available")
+                except Exception:
+                    # Fallback: load our own instance
+                    HallucinationDetectorV2._model = SentenceTransformer('all-MiniLM-L6-v2')
+                    logger.info("Loaded all-MiniLM-L6-v2 model for hallucination detection")
+                
                 HallucinationDetectorV2._initialized = True
                 logger.info("Hallucination detection model loaded successfully")
             except Exception as e:
