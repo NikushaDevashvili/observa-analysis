@@ -29,12 +29,27 @@ class HallucinationDetector:
             logger.info("Loading hallucination detection model...")
             model_name = 'cross-encoder/nli-deberta-v3-small'
             try:
-                # Use trust_remote_code=False and local_files_only=False to avoid tokenizer issues
-                HallucinationDetector._tokenizer = AutoTokenizer.from_pretrained(
-                    model_name,
-                    trust_remote_code=False,
-                    local_files_only=False
-                )
+                # Try loading with use_fast=False to avoid fast tokenizer issues
+                logger.info("Attempting to load tokenizer with use_fast=False...")
+                try:
+                    HallucinationDetector._tokenizer = AutoTokenizer.from_pretrained(
+                        model_name,
+                        use_fast=False,  # Use slow tokenizer to avoid compatibility issues
+                        trust_remote_code=False,
+                        local_files_only=False
+                    )
+                    logger.info("Slow tokenizer loaded successfully")
+                except Exception as tokenizer_error:
+                    logger.error(f"Failed to load slow tokenizer: {tokenizer_error}")
+                    # Try with use_fast=True as fallback
+                    logger.info("Trying fast tokenizer as fallback...")
+                    HallucinationDetector._tokenizer = AutoTokenizer.from_pretrained(
+                        model_name,
+                        use_fast=True,
+                        trust_remote_code=False,
+                        local_files_only=False
+                    )
+                
                 HallucinationDetector._model = AutoModelForSequenceClassification.from_pretrained(
                     model_name,
                     trust_remote_code=False,
