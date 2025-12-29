@@ -27,7 +27,10 @@ class HallucinationDetector:
         """Initialize the DeBERTa model (only once due to singleton)"""
         if HallucinationDetector._model is None:
             logger.info("Loading hallucination detection model...")
-            model_name = 'cross-encoder/nli-deberta-v3-small'
+            # Use a more compatible model - microsoft/deberta-v3-base for NLI
+            # This model has better tokenizer compatibility
+            model_name = 'microsoft/deberta-v3-base'
+            # Alternative: 'cross-encoder/nli-deberta-v3-small' (has tokenizer issues)
             try:
                 # Try loading with use_fast=False to avoid fast tokenizer issues
                 logger.info("Attempting to load tokenizer with use_fast=False...")
