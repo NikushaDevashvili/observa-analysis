@@ -27,50 +27,44 @@ class HallucinationDetector:
         """Initialize the DeBERTa model (only once due to singleton)"""
         if HallucinationDetector._model is None:
             logger.info("Loading hallucination detection model...")
-            # Use a more compatible model - microsoft/deberta-v3-base for NLI
-            # This model has better tokenizer compatibility
-            model_name = 'microsoft/deberta-v3-base'
-            # Alternative: 'cross-encoder/nli-deberta-v3-small' (has tokenizer issues)
+            # Use cross-encoder/nli-deberta-v3-small - best NLI model for hallucination detection
+            model_name = 'cross-encoder/nli-deberta-v3-small'
+            
             try:
-                # Try loading with use_fast=False to avoid fast tokenizer issues
-                logger.info("Attempting to load tokenizer with use_fast=False...")
+                # Try loading with use_fast=False first (slow tokenizer, more compatible)
+                logger.info(f"Attempting to load {model_name} with use_fast=False...")
                 try:
                     HallucinationDetector._tokenizer = AutoTokenizer.from_pretrained(
                         model_name,
-                        use_fast=False,  # Use slow tokenizer to avoid compatibility issues
+                        use_fast=False,  # Use slow tokenizer to avoid PyPreTokenizerTypeWrapper error
                         trust_remote_code=False,
-                        local_files_only=False,
-                        force_download=False,  # Don't re-download if cached
-                        resume_download=True
+                        local_files_only=False
                     )
                     logger.info("Slow tokenizer loaded successfully")
                 except Exception as tokenizer_error:
                     logger.error(f"Failed to load slow tokenizer: {tokenizer_error}")
-                    # Try clearing cache and reloading
-                    logger.info("Trying to reload with cache cleared...")
-                    import os
-                    cache_dir = os.path.expanduser("~/.cache/huggingface")
+                    # Try with use_fast=True as fallback
+                    logger.info("Trying fast tokenizer as fallback...")
                     try:
-                        # Try loading model directly without cache
                         HallucinationDetector._tokenizer = AutoTokenizer.from_pretrained(
                             model_name,
-                            use_fast=False,
+                            use_fast=True,
                             trust_remote_code=False,
-                            local_files_only=False,
-                            force_download=True  # Force re-download
+                            local_files_only=False
                         )
-                        logger.info("Tokenized loaded after cache clear")
+                        logger.info("Fast tokenizer loaded successfully")
                     except Exception as e2:
-                        logger.error(f"Failed to load tokenizer even after cache clear: {e2}")
+                        logger.error(f"Both tokenizer methods failed: {e2}")
                         raise
                 
+                # Load the model
                 HallucinationDetector._model = AutoModelForSequenceClassification.from_pretrained(
                     model_name,
                     trust_remote_code=False,
                     local_files_only=False
                 )
                 HallucinationDetector._model.eval()  # Set to evaluation mode
-                logger.info("Hallucination detection model loaded successfully")
+                logger.info(f"Hallucination detection model loaded successfully: {model_name}")
             except Exception as e:
                 logger.error(f"Failed to load hallucination model: {e}", exc_info=True)
                 # Don't raise - return error in check() method instead

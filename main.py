@@ -105,9 +105,8 @@ async def analyze_trace(request: TraceAnalysisRequest):
         logger.info(f"Analyzing trace {request.trace_id} for tenant {request.tenant_id}")
         
         # Import analysis services (lazy import to avoid loading models on startup)
-        # Skip DeBERTa due to memory constraints - use lighter sentence-transformers model instead
-# from services.hallucination_detector import HallucinationDetector
-from services.hallucination_detector_v2 import HallucinationDetectorV2
+        from services.hallucination_detector import HallucinationDetector
+from services.hallucination_detector_v2 import HallucinationDetectorV2  # Fallback
         from services.context_detector import ContextDetector
         from services.faithfulness_detector import FaithfulnessDetector
         from services.cost_analyzer import CostAnalyzer
@@ -120,19 +119,40 @@ from services.hallucination_detector_v2 import HallucinationDetectorV2
         )
         
         # 1. Hallucination Detection (if context is provided)
-        # Using sentence-transformers model directly to avoid OOM issues with DeBERTa
         if request.context:
             try:
-                detector = HallucinationDetectorV2()
-                hallucination_result = detector.check(request.context, request.response)
-                result.analysis_model = "all-MiniLM-L6-v2"
+                # Try cross-encoder/nli-deberta-v3-small first (best NLI accuracy)
+                # Fallback to sentence-transformers if it fails
+                detector = None
+                hallucination_result = None
                 
-                result.is_hallucination = hallucination_result.get("is_hallucination", False)
-                result.hallucination_confidence = hallucination_result.get("confidence_score")
-                result.hallucination_reasoning = hallucination_result.get("reasoning")
-                logger.info(f"Hallucination detection completed: is_hallucination={result.is_hallucination}, confidence={result.hallucination_confidence}")
+                try:
+                    detector = HallucinationDetector()
+                    hallucination_result = detector.check(request.context, request.response)
+                    # Check if model loaded successfully
+                    if "Model not loaded" in hallucination_result.get("reasoning", "") or "check logs" in hallucination_result.get("reasoning", "").lower():
+                        raise Exception("DeBERTa model not loaded")
+                    result.analysis_model = "cross-encoder/nli-deberta-v3-small"
+                    logger.info("Using cross-encoder/nli-deberta-v3-small for hallucination detection")
+                except Exception as e1:
+                    logger.warning(f"DeBERTa hallucination detector failed: {e1}, trying sentence-transformers fallback...")
+                    # Fallback to sentence-transformers based detector
+                    try:
+                        detector = HallucinationDetectorV2()
+                        hallucination_result = detector.check(request.context, request.response)
+                        result.analysis_model = "all-MiniLM-L6-v2"
+                        logger.info("Using sentence-transformers fallback for hallucination detection")
+                    except Exception as e2:
+                        logger.error(f"Fallback detector also failed: {e2}", exc_info=True)
+                        raise
+                
+                if hallucination_result:
+                    result.is_hallucination = hallucination_result.get("is_hallucination", False)
+                    result.hallucination_confidence = hallucination_result.get("confidence_score")
+                    result.hallucination_reasoning = hallucination_result.get("reasoning")
+                    logger.info(f"Hallucination detection completed: is_hallucination={result.is_hallucination}, confidence={result.hallucination_confidence}")
             except Exception as e:
-                logger.error(f"Hallucination detection failed: {e}", exc_info=True)
+                logger.error(f"Hallucination detection failed completely: {e}", exc_info=True)
                 # Set defaults on error
                 result.is_hallucination = False
                 result.hallucination_confidence = None
