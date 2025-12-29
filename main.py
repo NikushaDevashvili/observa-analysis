@@ -122,12 +122,17 @@ async def analyze_trace(request: TraceAnalysisRequest):
             try:
                 detector = HallucinationDetector()
                 hallucination_result = detector.check(request.context, request.response)
-                result.is_hallucination = hallucination_result["is_hallucination"]
-                result.hallucination_confidence = hallucination_result["confidence_score"]
-                result.hallucination_reasoning = hallucination_result["reasoning"]
+                result.is_hallucination = hallucination_result.get("is_hallucination", False)
+                result.hallucination_confidence = hallucination_result.get("confidence_score")
+                result.hallucination_reasoning = hallucination_result.get("reasoning")
                 result.analysis_model = "deberta-v3-small"
+                logger.info(f"Hallucination detection completed: is_hallucination={result.is_hallucination}, confidence={result.hallucination_confidence}")
             except Exception as e:
-                logger.error(f"Hallucination detection failed: {e}")
+                logger.error(f"Hallucination detection failed: {e}", exc_info=True)
+                # Set defaults on error
+                result.is_hallucination = False
+                result.hallucination_confidence = None
+                result.hallucination_reasoning = f"Error: {str(e)}"
         
         # 2. Context Drop Detection (if context is provided)
         if request.context and request.query:
@@ -144,10 +149,13 @@ async def analyze_trace(request: TraceAnalysisRequest):
             try:
                 faithfulness_detector = FaithfulnessDetector()
                 faithfulness_result = faithfulness_detector.check(request.context, request.response)
-                result.has_faithfulness_issue = faithfulness_result["has_faithfulness_issue"]
-                result.answer_faithfulness_score = faithfulness_result["faithfulness_score"]
+                result.has_faithfulness_issue = faithfulness_result.get("has_faithfulness_issue", False)
+                result.answer_faithfulness_score = faithfulness_result.get("faithfulness_score")
+                logger.info(f"Faithfulness detection completed: has_issue={result.has_faithfulness_issue}, score={result.answer_faithfulness_score}")
             except Exception as e:
-                logger.error(f"Faithfulness detection failed: {e}")
+                logger.error(f"Faithfulness detection failed: {e}", exc_info=True)
+                result.has_faithfulness_issue = False
+                result.answer_faithfulness_score = None
         
         # 4. Cost Anomaly Detection
         if request.tokens_total and request.model:
