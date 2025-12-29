@@ -138,11 +138,15 @@ async def analyze_trace(request: TraceAnalysisRequest):
         if request.context and request.query:
             try:
                 context_detector = ContextDetector()
-                context_result = context_detector.check(request.query, request.context)
+                # Pass response to check if it uses the context
+                context_result = context_detector.check(request.query, request.context, request.response)
                 result.has_context_drop = context_result["has_context_drop"]
                 result.context_relevance_score = context_result["relevance_score"]
+                logger.info(f"Context drop detection completed: has_drop={result.has_context_drop}, score={result.context_relevance_score}")
             except Exception as e:
-                logger.error(f"Context drop detection failed: {e}")
+                logger.error(f"Context drop detection failed: {e}", exc_info=True)
+                result.has_context_drop = False
+                result.context_relevance_score = None
         
         # 3. Answer Faithfulness Detection (if context is provided)
         if request.context:

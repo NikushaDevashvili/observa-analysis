@@ -13,14 +13,33 @@ logger = logging.getLogger(__name__)
 class HallucinationDetector:
     """Detects hallucinations by comparing response to context using NLI"""
     
+    _instance = None
+    _model = None
+    _tokenizer = None
+    
+    def __new__(cls):
+        """Singleton pattern to avoid reloading model multiple times"""
+        if cls._instance is None:
+            cls._instance = super(HallucinationDetector, cls).__new__(cls)
+        return cls._instance
+    
     def __init__(self):
-        """Initialize the DeBERTa model"""
-        logger.info("Loading hallucination detection model...")
-        model_name = 'cross-encoder/nli-deberta-v3-small'
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
-        self.model.eval()  # Set to evaluation mode
-        logger.info("Hallucination detection model loaded")
+        """Initialize the DeBERTa model (only once due to singleton)"""
+        if self._model is None:
+            logger.info("Loading hallucination detection model...")
+            model_name = 'cross-encoder/nli-deberta-v3-small'
+            try:
+                self._tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self._model = AutoModelForSequenceClassification.from_pretrained(model_name)
+                self._model.eval()  # Set to evaluation mode
+                logger.info("Hallucination detection model loaded successfully")
+            except Exception as e:
+                logger.error(f"Failed to load hallucination model: {e}", exc_info=True)
+                raise
+        
+        # Use class-level model and tokenizer
+        self.tokenizer = self._tokenizer
+        self.model = self._model
     
     def check(self, context: str, answer: str) -> dict:
         """
