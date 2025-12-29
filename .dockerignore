@@ -24,4 +24,7 @@ coverage.xml
 *.egg-info/
 dist/
 build/
-
+models/
+*.bin
+*.safetensors
+tests/

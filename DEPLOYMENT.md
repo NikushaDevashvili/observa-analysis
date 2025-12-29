@@ -63,6 +63,7 @@ Python FastAPI service for ML analysis of LLM traces.
    fly launch
    ```
 4. **Configure `fly.toml`:**
+
    ```toml
    app = "observa-analysis"
    primary_region = "fra"
@@ -81,6 +82,7 @@ Python FastAPI service for ML analysis of LLM traces.
      protocol = "tcp"
      internal_port = 8000
    ```
+
 5. **Deploy:**
    ```bash
    fly deploy
@@ -89,12 +91,14 @@ Python FastAPI service for ML analysis of LLM traces.
 ## After Deployment
 
 1. **Test the service:**
+
    ```bash
    curl https://your-service-url.railway.app/health
    # Should return: {"status":"ok"}
    ```
 
 2. **Add to observa-api:**
+
    - Go to Vercel Dashboard → `observa-api` project
    - Settings → Environment Variables
    - Add: `ANALYSIS_SERVICE_URL=https://your-service-url.railway.app`
@@ -116,15 +120,18 @@ Python FastAPI service for ML analysis of LLM traces.
 ## Troubleshooting
 
 ### Service Times Out
+
 - Check logs for model download progress
 - Ensure PORT environment variable is set
 - Verify start command is correct
 
 ### Out of Memory
+
 - Upgrade to higher tier (2GB+ RAM)
 - Or use smaller models (modify code)
 
 ### Slow Responses
+
 - First request after cold start is slow (loading models)
 - Subsequent requests are fast
 - Consider keeping service warm with health checks
@@ -140,4 +147,3 @@ GET /health
 Returns: `{"status":"ok"}`
 
 Use this to verify deployment and for monitoring.
-
