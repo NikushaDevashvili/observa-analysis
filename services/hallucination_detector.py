@@ -53,35 +53,59 @@ class HallucinationDetector:
             dict with is_hallucination, confidence_score, truth_score, reasoning
         """
         try:
+            # Validate inputs
+            if not context or not answer:
+                logger.warning("Empty context or answer provided for hallucination detection")
+                return {
+                    "is_hallucination": False,
+                    "is_correct": False,
+                    "confidence_score": 0.0,
+                    "truth_score": 0.0,
+                    "reasoning": "Empty context or answer provided"
+                }
+            
             # Tokenize context and answer together
+            # For NLI, we pass them as a pair (premise, hypothesis)
             inputs = self.tokenizer(
                 context,
                 answer,
                 return_tensors='pt',
                 truncation=True,
-                max_length=512  # Limit to prevent OOM
+                max_length=512,  # Limit to prevent OOM
+                padding=True
             )
             
             # Forward pass
             with torch.no_grad():
                 outputs = self.model(**inputs)
-                logits = outputs.logits.numpy()[0]
+                # Handle both tensor and numpy outputs
+                if hasattr(outputs.logits, 'numpy'):
+                    logits = outputs.logits.numpy()[0]
+                else:
+                    logits = outputs.logits.detach().cpu().numpy()[0]
             
             # Convert logits to probabilities
             probabilities = self._softmax(logits)
             
-            # Label Map:
-            # 0 = Contradiction (HALLUCINATION)
-            # 1 = Entailment (TRUTH)
-            # 2 = Neutral (IRRELEVANT)
+            # Label Map for NLI models:
+            # 0 = Contradiction (HALLUCINATION) - answer contradicts context
+            # 1 = Entailment (TRUTH) - answer follows from context
+            # 2 = Neutral (IRRELEVANT) - answer is unrelated to context
             
             contradiction_prob = float(probabilities[0])
             entailment_prob = float(probabilities[1])
             neutral_prob = float(probabilities[2])
             
-            # Hallucination if contradiction probability is highest
-            is_hallucination = contradiction_prob > entailment_prob
-            is_correct = entailment_prob > contradiction_prob and entailment_prob > neutral_prob
+            # Improved hallucination detection:
+            # 1. Contradiction is highest probability, OR
+            # 2. Contradiction is > 0.5 (high confidence), OR
+            # 3. Contradiction is significantly higher than entailment (>0.2 difference)
+            is_hallucination = (
+                contradiction_prob > entailment_prob or
+                contradiction_prob > 0.5 or
+                (contradiction_prob - entailment_prob) > 0.2
+            )
+            is_correct = entailment_prob > 0.5 and entailment_prob > contradiction_prob
             
             return {
                 "is_hallucination": bool(is_hallucination),
