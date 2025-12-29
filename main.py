@@ -120,12 +120,25 @@ async def analyze_trace(request: TraceAnalysisRequest):
         # 1. Hallucination Detection (if context is provided)
         if request.context:
             try:
-                detector = HallucinationDetector()
-                hallucination_result = detector.check(request.context, request.response)
+                # Try original detector first, fallback to V2 if it fails
+                try:
+                    detector = HallucinationDetector()
+                    hallucination_result = detector.check(request.context, request.response)
+                    # Check if model loaded successfully (not an error message)
+                    if "Model not loaded" in hallucination_result.get("reasoning", ""):
+                        raise Exception("Original detector model not loaded")
+                    result.analysis_model = "deberta-v3-small"
+                except Exception as e1:
+                    logger.warning(f"Original hallucination detector failed: {e1}, trying V2...")
+                    # Fallback to sentence-transformers based detector
+                    from services.hallucination_detector_v2 import HallucinationDetectorV2
+                    detector = HallucinationDetectorV2()
+                    hallucination_result = detector.check(request.context, request.response)
+                    result.analysis_model = "all-mpnet-base-v2"
+                
                 result.is_hallucination = hallucination_result.get("is_hallucination", False)
                 result.hallucination_confidence = hallucination_result.get("confidence_score")
                 result.hallucination_reasoning = hallucination_result.get("reasoning")
-                result.analysis_model = "deberta-v3-small"
                 logger.info(f"Hallucination detection completed: is_hallucination={result.is_hallucination}, confidence={result.hallucination_confidence}")
             except Exception as e:
                 logger.error(f"Hallucination detection failed: {e}", exc_info=True)
