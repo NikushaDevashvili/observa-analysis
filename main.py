@@ -106,7 +106,7 @@ async def analyze_trace(request: TraceAnalysisRequest):
         
         # Import analysis services (lazy import to avoid loading models on startup)
         from services.hallucination_detector import HallucinationDetector
-from services.hallucination_detector_v2 import HallucinationDetectorV2  # Fallback
+        from services.hallucination_detector_v2 import HallucinationDetectorV2  # Fallback
         from services.context_detector import ContextDetector
         from services.faithfulness_detector import FaithfulnessDetector
         from services.cost_analyzer import CostAnalyzer
