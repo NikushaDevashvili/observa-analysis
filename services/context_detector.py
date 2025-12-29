@@ -39,22 +39,28 @@ class ContextDetector:
             # Calculate cosine similarity between query and context
             query_context_similarity = self._cosine_similarity(query_embedding, context_embedding)
             
-            # If response is provided, also check if response uses the context
+            # If response is provided, check if response uses the context
             if response:
                 response_embedding = self.model.encode(response, convert_to_numpy=True)
                 response_context_similarity = self._cosine_similarity(response_embedding, context_embedding)
                 
-                # Context drop if:
-                # 1. Query and context are not similar (context doesn't match query)
-                # 2. Response and context are not similar (response doesn't use context)
-                # Use the lower of the two similarities as the relevance score
-                relevance_score = min(query_context_similarity, response_context_similarity)
+                # Context drop detection logic:
+                # 1. Response-Context similarity is most important (does response use context?)
+                # 2. If response doesn't match context well (< 0.7), it's a context drop
+                # 3. Also consider query-context similarity (should context have been retrieved?)
+                
+                # Primary indicator: response doesn't use context
+                # Secondary: context might not be relevant to query
+                # Use weighted average: 70% response-context, 30% query-context
+                relevance_score = (response_context_similarity * 0.7) + (query_context_similarity * 0.3)
+                
+                # More aggressive threshold: < 0.7 means context drop
+                # This catches cases where response doesn't properly use the provided context
+                has_context_drop = response_context_similarity < 0.7 or relevance_score < 0.65
             else:
                 relevance_score = query_context_similarity
-            
-            # Threshold: < 0.6 means potential context drop
-            # Lower threshold because we want to catch cases where context was provided but not used
-            has_context_drop = relevance_score < 0.6
+                # Without response, use stricter threshold for query-context match
+                has_context_drop = query_context_similarity < 0.6
             
             return {
                 "has_context_drop": bool(has_context_drop),

@@ -25,21 +25,31 @@ class HallucinationDetector:
     
     def __init__(self):
         """Initialize the DeBERTa model (only once due to singleton)"""
-        if self._model is None:
+        if HallucinationDetector._model is None:
             logger.info("Loading hallucination detection model...")
             model_name = 'cross-encoder/nli-deberta-v3-small'
             try:
-                self._tokenizer = AutoTokenizer.from_pretrained(model_name)
-                self._model = AutoModelForSequenceClassification.from_pretrained(model_name)
-                self._model.eval()  # Set to evaluation mode
+                # Use trust_remote_code=False and local_files_only=False to avoid tokenizer issues
+                HallucinationDetector._tokenizer = AutoTokenizer.from_pretrained(
+                    model_name,
+                    trust_remote_code=False,
+                    local_files_only=False
+                )
+                HallucinationDetector._model = AutoModelForSequenceClassification.from_pretrained(
+                    model_name,
+                    trust_remote_code=False,
+                    local_files_only=False
+                )
+                HallucinationDetector._model.eval()  # Set to evaluation mode
                 logger.info("Hallucination detection model loaded successfully")
             except Exception as e:
                 logger.error(f"Failed to load hallucination model: {e}", exc_info=True)
-                raise
+                # Don't raise - return error in check() method instead
+                logger.warning("Hallucination detection will be disabled due to model loading error")
         
         # Use class-level model and tokenizer
-        self.tokenizer = self._tokenizer
-        self.model = self._model
+        self.tokenizer = HallucinationDetector._tokenizer
+        self.model = HallucinationDetector._model
     
     def check(self, context: str, answer: str) -> dict:
         """
@@ -52,6 +62,17 @@ class HallucinationDetector:
         Returns:
             dict with is_hallucination, confidence_score, truth_score, reasoning
         """
+        # Check if model is loaded
+        if self.model is None or self.tokenizer is None:
+            logger.error("Hallucination model not loaded - cannot perform detection")
+            return {
+                "is_hallucination": False,
+                "is_correct": False,
+                "confidence_score": 0.0,
+                "truth_score": 0.0,
+                "reasoning": "Model not loaded - check logs for initialization errors"
+            }
+        
         try:
             # Validate inputs
             if not context or not answer:
@@ -66,9 +87,10 @@ class HallucinationDetector:
             
             # Tokenize context and answer together
             # For NLI, we pass them as a pair (premise, hypothesis)
+            # Use text_pair parameter explicitly for clarity
             inputs = self.tokenizer(
-                context,
-                answer,
+                text=context,
+                text_pair=answer,
                 return_tensors='pt',
                 truncation=True,
                 max_length=512,  # Limit to prevent OOM
