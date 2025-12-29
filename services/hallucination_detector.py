@@ -36,19 +36,30 @@ class HallucinationDetector:
                         model_name,
                         use_fast=False,  # Use slow tokenizer to avoid compatibility issues
                         trust_remote_code=False,
-                        local_files_only=False
+                        local_files_only=False,
+                        force_download=False,  # Don't re-download if cached
+                        resume_download=True
                     )
                     logger.info("Slow tokenizer loaded successfully")
                 except Exception as tokenizer_error:
                     logger.error(f"Failed to load slow tokenizer: {tokenizer_error}")
-                    # Try with use_fast=True as fallback
-                    logger.info("Trying fast tokenizer as fallback...")
-                    HallucinationDetector._tokenizer = AutoTokenizer.from_pretrained(
-                        model_name,
-                        use_fast=True,
-                        trust_remote_code=False,
-                        local_files_only=False
-                    )
+                    # Try clearing cache and reloading
+                    logger.info("Trying to reload with cache cleared...")
+                    import os
+                    cache_dir = os.path.expanduser("~/.cache/huggingface")
+                    try:
+                        # Try loading model directly without cache
+                        HallucinationDetector._tokenizer = AutoTokenizer.from_pretrained(
+                            model_name,
+                            use_fast=False,
+                            trust_remote_code=False,
+                            local_files_only=False,
+                            force_download=True  # Force re-download
+                        )
+                        logger.info("Tokenized loaded after cache clear")
+                    except Exception as e2:
+                        logger.error(f"Failed to load tokenizer even after cache clear: {e2}")
+                        raise
                 
                 HallucinationDetector._model = AutoModelForSequenceClassification.from_pretrained(
                     model_name,
