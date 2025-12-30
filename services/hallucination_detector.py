@@ -1,6 +1,6 @@
 """
 Hallucination Detection Service
-Uses DeBERTa-v3-small NLI model to detect hallucinations
+Uses cross-encoder/nli-deberta-v3-small NLI model to detect hallucinations
 """
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
