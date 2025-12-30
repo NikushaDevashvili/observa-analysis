@@ -57,12 +57,22 @@ class HallucinationDetector:
                         logger.error(f"Both tokenizer methods failed: {e2}")
                         raise
                 
-                # Load the model
+                # Load the model with memory optimizations
+                # Use low_cpu_mem_usage to reduce peak memory during loading
+                # Use safetensors format (already default, but explicit)
+                logger.info("Loading model weights (this may take a moment and use significant memory)...")
                 HallucinationDetector._model = AutoModelForSequenceClassification.from_pretrained(
                     model_name,
                     trust_remote_code=False,
-                    local_files_only=False
+                    local_files_only=False,
+                    low_cpu_mem_usage=True,  # Reduce peak memory usage during loading
+                    use_safetensors=True  # Use safetensors format (more memory efficient)
                 )
+                # Force garbage collection after loading to free up memory
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
                 HallucinationDetector._model.eval()  # Set to evaluation mode
                 logger.info(f"Hallucination detection model loaded successfully: {model_name}")
             except Exception as e:
